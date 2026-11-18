@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Function Evaluation Explorer — Step-by-Step Substitution</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface-alt: #f1f5f9;
+    --border: #cbd5e1;
+    --text: #0f172a;
+    --text-muted: #475569;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+
+    --sub-bg: #dbeafe;
+    --sub-border: #3b82f6;
+    --sub-text: #1e40af;
+
+    --op-bg: #fef3c7;
+    --op-border: #f59e0b;
+    --op-text: #92400e;
+
+    --ans-bg: #dcfce7;
+    --ans-border: #16a34a;
+    --ans-text: #14532d;
+
+    --ghost-color: #94a3b8;
+    --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-math: "Cambria Math", "Latin Modern Math", "STIX Two Math", Georgia, "Times New Roman", serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .badge {
+    font-size: 0.75rem;
+    background: var(--sub-bg);
+    color: var(--sub-text);
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1.5px solid transparent;
+  }
+  .swatch.sub { background: var(--sub-bg); border-color: var(--sub-border); }
+  .swatch.op  { background: var(--op-bg); border-color: var(--op-border); }
+  .swatch.ans { background: var(--ans-bg); border-color: var(--ans-border); }
+
+  main {
+    max-width: 1120px;
+    margin: 1.5rem auto;
+    padding: 0 1rem;
+    display: grid;
+    grid-template-columns: 1fr 290px;
+    gap: 1.5rem;
+  }
+
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  }
+
+  .setup-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr auto;
+    gap: 0.75rem;
+    align-items: end;
+    margin-bottom: 1rem;
+  }
+
+  @media (max-width: 640px) {
+    .setup-grid { grid-template-columns: 1fr; }
+  }
+
+  label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.3rem;
+  }
+
+  select, input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    font-size: 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-ui);
+  }
+
+  input.math-input {
+    font-family: var(--font-math);
+    font-size: 1.1rem;
+  }
+
+  select:focus, input:focus, button:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.35);
+    outline-offset: 1px;
+    border-color: var(--primary);
+  }
+
+  .custom-row {
+    display: none;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--surface-alt);
+    border-radius: 8px;
+  }
+  .custom-row.visible { display: grid; }
+
+  .error-banner {
+    display: none;
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #f87171;
+    padding: 0.55rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+  .error-banner.visible { display: block; }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.6rem 1.05rem;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    transition: background 150ms ease, transform 100ms ease, border-color 150ms ease;
+  }
+
+  button:hover:not(:disabled) { background: var(--surface-alt); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  button.primary {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+    font-size: 1.02rem;
+    padding: 0.65rem 1.35rem;
+  }
+  button.primary:hover:not(:disabled) { background: var(--primary-hover); }
+
+  .toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+    user-select: none;
+  }
+
+  .stage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .progress-pill {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--primary);
+    background: #eff6ff;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid #bfdbfe;
+  }
+
+  .progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--surface-alt);
+    border-radius: 999px;
+    margin: 0 1rem;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--primary);
+    width: 0%;
+    transition: width 300ms ease;
+  }
+
+  .steps-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .step-card {
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 0.95rem 1.15rem;
+    background: var(--surface);
+    animation: stepReveal 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .step-card.current {
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+  }
+
+  .step-card.final-card {
+    background: #f0fdf4;
+    border-color: var(--ans-border);
+  }
+
+  @keyframes stepReveal {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .step-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .step-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+
+  .step-card.current .step-title { color: var(--primary); }
+
+  .math-line {
+    font-family: var(--font-math);
+    font-size: 1.65rem;
+    letter-spacing: 0.02em;
+    padding: 0.3rem 0;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 600px) {
+    .math-line { font-size: 1.35rem; }
+  }
+
+  .var-x { font-style: italic; font-weight: 600; }
+
+  .placeholder-box {
+    display: inline-block;
+    min-width: 1.6em;
+    text-align: center;
+    border: 2px dashed var(--sub-border);
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 0 0.25em;
+    margin: 0 0.08em;
+    color: var(--sub-text);
+  }
+
+  .sub-pill {
+    display: inline-flex;
+    align-items: center;
+    background: var(--sub-bg);
+    color: var(--sub-text);
+    border: 1.5px solid var(--sub-border);
+    border-radius: 7px;
+    padding: 0.02em 0.35em;
+    margin: 0 0.06em;
+    font-weight: 700;
+    animation: dropIn 360ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  .sub-pill.occ-1 { background: #dbeafe; border-color: #2563eb; color: #1e3a8a; }
+  .sub-pill.occ-2 { background: #e0e7ff; border-color: #4f46e5; color: #312e81; }
+  .sub-pill.occ-3 { background: #fae8ff; border-color: #c026d3; color: #701a75; }
+
+  .ghost-x {
+    color: var(--ghost-color);
+    text-decoration: line-through;
+    font-style: italic;
+    font-size: 0.8em;
+    margin-right: 0.25em;
+    opacity: 0.85;
+    animation: fadeGhost 360ms ease both;
+  }
+
+  @keyframes dropIn {
+    from { opacity: 0; transform: translateY(-10px) scale(0.92); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes fadeGhost {
+    from { opacity: 1; }
+    to   { opacity: 0.65; }
+  }
+
+  .op-highlight {
+    display: inline-block;
+    background: var(--op-bg);
+    color: var(--op-text);
+    border: 1.5px solid var(--op-border);
+    border-radius: 7px;
+    padding: 0.02em 0.35em;
+    margin: 0 0.06em;
+    font-weight: 700;
+    animation: pulseOp 340ms ease both;
+  }
+
+  @keyframes pulseOp {
+    0%   { transform: scale(0.96); background: #fde68a; }
+    60%  { transform: scale(1.03); }
+    100% { transform: scale(1); }
+  }
+
+  .ans-highlight {
+    display: inline-block;
+    background: var(--ans-bg);
+    color: var(--ans-text);
+    border: 2px solid var(--ans-border);
+    border-radius: 8px;
+    padding: 0.06em 0.45em;
+    font-weight: 700;
+    font-size: 1.15em;
+  }
+
+  .why-hint {
+    margin-top: 0.45rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    background: var(--surface-alt);
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    border-left: 3px solid var(--primary);
+  }
+  .why-hint strong { color: var(--text); }
+
+  .your-turn-box {
+    display: none;
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #eff6ff;
+    border: 1.5px solid #93c5fd;
+    border-radius: 10px;
+  }
+  .your-turn-box.visible { display: block; }
+
+  .your-turn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    margin-top: 0.5rem;
+  }
+
+  .your-turn-row input {
+    max-width: 180px;
+    font-family: var(--font-math);
+    font-size: 1.15rem;
+  }
+
+  .feedback-msg {
+    margin-top: 0.6rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .feedback-msg.ok  { color: #15803d; }
+  .feedback-msg.err { color: #b91c1c; }
+
+  .sidebar h2 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .history-item {
+    padding: 0.65rem 0.75rem;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: var(--font-math);
+    font-size: 1.05rem;
+    cursor: pointer;
+    transition: border-color 150ms ease;
+  }
+  .history-item:hover { border-color: var(--primary); }
+  .history-item small {
+    display: block;
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .empty-history {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Function Evaluation Explorer <span class="badge">Step-by-Step Algebra</span></h1>
+  <div class="legend" aria-label="Color legend">
+    <span class="legend-item"><span class="swatch sub"></span>Substituted value</span>
+    <span class="legend-item"><span class="swatch op"></span>Active operation</span>
+    <span class="legend-item"><span class="swatch ans"></span>Final result</span>
+  </div>
+</header>
+
+<main>
+  <section class="card" aria-label="Function evaluation workspace">
+    <div class="setup-grid">
+      <div>
+        <label for="presetSelect">Choose a function f(x)</label>
+        <select id="presetSelect">
+          <option value="3x^2 - 2x + 5" selected>Quadratic: f(x) = 3x&sup2; &minus; 2x + 5</option>
+          <option value="2x + 1">Linear: f(x) = 2x + 1</option>
+          <option value="x^2 - 5x + 6">Quadratic: f(x) = x&sup2; &minus; 5x + 6</option>
+          <option value="-4x + 7">Negative slope: f(x) = &minus;4x + 7</option>
+          <option value="(x + 3) / 2">Fraction: f(x) = (x + 3) &divide; 2</option>
+          <option value="x^3 - 2x">Cubic: f(x) = x&sup3; &minus; 2x</option>
+          <option value="2(x - 1)^2 + 3">Vertex form: f(x) = 2(x &minus; 1)&sup2; + 3</option>
+          <option value="custom">Enter your own function...</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="xInput">Value to substitute (x =)</label>
+        <input type="number" id="xInput" class="math-input" value="4" step="any">
+      </div>
+
+      <div>
+        <button type="button" id="randomXBtn" title="Pick a random integer for x">Randomize x</button>
+      </div>
+    </div>
+
+    <div class="custom-row" id="customRow">
+      <div>
+        <label for="customExprInput">Custom expression in terms of x (supports +, -, *, /, ^, parentheses)</label>
+        <input type="text" id="customExprInput" class="math-input" placeholder="e.g. 2x^2 - 3(x + 1)" value="2x^2 - 3(x + 1)">
+      </div>
+      <div style="align-self: end;">
+        <button type="button" id="applyCustomBtn" class="primary">Use Function</button>
+      </div>
+    </div>
+
+    <div class="error-banner" id="errorBanner" role="alert"></div>
+
+    <div class="toolbar">
+      <div class="btn-group">
+        <button type="button" id="nextStepBtn" class="primary">Next step &rarr;</button>
+        <button type="button" id="resetBtn">Reset</button>
+        <button type="button" id="showAllBtn">Show all steps</button>
+        <button type="button" id="nextExampleBtn">Try another example</button>
+      </div>
+
+      <label class="toggle-label">
+        <input type="checkbox" id="yourTurnToggle">
+        Your turn mode (hide answer)
+      </label>
+    </div>
+
+    <div class="your-turn-box" id="yourTurnBox">
+      <div id="yourTurnPrompt" style="font-weight: 600;"></div>
+      <div class="your-turn-row">
+        <input type="text" id="studentAnswerInput" placeholder="e.g. 45 or -5" aria-label="Your answer">
+        <button type="button" id="checkAnswerBtn" class="primary">Check Answer</button>
+      </div>
+      <div class="feedback-msg" id="feedbackMsg" aria-live="polite"></div>
+    </div>
+
+    <div class="stage-header">
+      <span class="progress-pill" id="progressLabel">Step 1 of 7</span>
+      <div class="progress-bar" aria-hidden="true">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <span id="targetQueryLabel" style="font-family: var(--font-math); font-weight: 700; font-size: 1.1rem;"></span>
+    </div>
+
+    <div class="steps-container" id="stepsContainer" aria-live="polite"></div>
+  </section>
+
+  <aside class="card sidebar" aria-label="Completed problems scratchpad">
+    <h2>
+      <span>Scratchpad</span>
+      <button type="button" id="clearHistoryBtn" style="padding: 0.25rem 0.55rem; font-size: 0.78rem;">Clear</button>
+    </h2>
+    <p class="empty-history" id="emptyHistoryMsg">Complete a problem to log it here. Click any entry to reload it.</p>
+    <ul class="history-list" id="historyList"></ul>
+  </aside>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var MINUS = "\u2212";
+  var TIMES = "\u00d7";
+  var DIV   = "\u00f7";
+  var ARROW = "\u2192";
+
+  function normalizeInput(raw) {
+    return String(raw)
+      .replace(/[\u2212\u2013\u2014]/g, "-")
+      .replace(/[\u00d7\u00b7]/g, "*")
+      .replace(/\u00f7/g, "/")
+      .replace(/\u00b2/g, "^2")
+      .replace(/\u00b3/g, "^3")
+      .replace(/X/g, "x")
+      .trim();
+  }
+
+  function tokenize(input) {
+    var s = normalizeInput(input);
+    if (!s) throw new Error("Please enter a mathematical expression.");
+
+    var tokens = [];
+    var i = 0;
+
+    while (i < s.length) {
+      var ch = s[i];
+
+      if (/\s/.test(ch)) {
+        i++;
+        continue;
+      }
+
+      if (/[0-9.]/.test(ch)) {
+        var numStr = "";
+        var dotCount = 0;
+        while (i < s.length && /[0-9.]/.test(s[i])) {
+          if (s[i] === ".") dotCount++;
+          if (dotCount > 1) throw new Error('Invalid number format near "' + numStr + '."');
+          numStr += s[i++];
+        }
+        if (numStr === ".") throw new Error('Standalone decimal point "." is invalid.');
+        tokens.push({ type: "NUM", value: parseFloat(numStr), raw: numStr });
+        continue;
+      }
+
+      if (ch === "x") {
+        tokens.push({ type: "VAR", value: "x" });
+        i++;
+        continue;
+      }
+
+      if ("+-*/^()".indexOf(ch) !== -1) {
+        tokens.push({ type: "OP", value: ch });
+        i++;
+        continue;
+      }
+
+      throw new Error('Unsupported character "' + ch + '". Use numbers, x, +, -, *, /, ^, and parentheses.');
+    }
+
+    var expanded = [];
+    for (var j = 0; j < tokens.length; j++) {
+      var curr = tokens[j];
+      expanded.push(curr);
+      if (j + 1 < tokens.length) {
+        var next = tokens[j + 1];
+        var currEndsValue = curr.type === "NUM" || curr.type === "VAR" || (curr.type === "OP" && curr.value === ")");
+        var nextStartsValue = next.type === "VAR" || (next.type === "OP" && next.value === "(");
+        if (currEndsValue && nextStartsValue) {
+          expanded.push({ type: "OP", value: "*", implicit: true });
+        }
+      }
+    }
+
+    return expanded;
+  }
+
+  function parseExpression(input) {
+    var tokens = tokenize(input);
+    var pos = 0;
+    var varCounter = 0;
+
+    function peek() { return tokens[pos] || null; }
+    function consume() { return tokens[pos++]; }
+
+    function parseExpr() {
+      var node = parseTerm();
+      while (peek() && peek().type === "OP" && (peek().value === "+" || peek().value === "-")) {
+        var op = consume().value;
+        var right = parseTerm();
+        node = { type: "Binary", op: op, left: node, right: right };
+      }
+      return node;
+    }
+
+    function parseTerm() {
+      var node = parseUnary();
+      while (peek() && peek().type === "OP" && (peek().value === "*" || peek().value === "/")) {
+        var tok = consume();
+        var right = parseUnary();
+        node = { type: "Binary", op: tok.value, implicit: !!tok.implicit, left: node, right: right };
+      }
+      return node;
+    }
+
+    function parseUnary() {
+      if (peek() && peek().type === "OP" && (peek().value === "+" || peek().value === "-")) {
+        var op = consume().value;
+        var arg = parseUnary();
+        if (op === "+") return arg;
+        return { type: "Unary", op: "-", arg: arg };
+      }
+      return parsePower();
+    }
+
+    function parsePower() {
+      var base = parsePrimary();
+      if (peek() && peek().type === "OP" && peek().value === "^") {
+        consume();
+        var exp = parseUnary();
+        return { type: "Binary", op: "^", left: base, right: exp };
+      }
+      return base;
+    }
+
+    function parsePrimary() {
+      var tok = peek();
+      if (!tok) throw new Error("Unexpected end of expression.");
+
+      if (tok.type === "NUM") {
+        consume();
+        return { type: "Num", value: tok.value };
+      }
+
+      if (tok.type === "VAR") {
+        consume();
+        varCounter++;
+        return { type: "Var", index: varCounter };
+      }
+
+      if (tok.type === "OP" && tok.value === "(") {
+        consume();
+        var inner = parseExpr();
+        if (!peek() || peek().type !== "OP" || peek().value !== ")") {
+          throw new Error("Missing closing parenthesis ')'.");
+        }
+        consume();
+        return { type: "Group", expr: inner };
+      }
+
+      throw new Error('Unexpected token "' + tok.value + '".');
+    }
+
+    var ast = parseExpr();
+    if (pos < tokens.length) {
+      throw new Error('Unexpected token "' + tokens[pos].value + '" near end of expression.');
+    }
+    return ast;
+  }
+
+  function evalAST(node, xVal) {
+    switch (node.type) {
+      case "Num":   return node.value;
+      case "Var":   return xVal;
+      case "Group": return evalAST(node.expr, xVal);
+      case "Unary": return -evalAST(node.arg, xVal);
+      case "Binary": {
+        var l = evalAST(node.left, xVal);
+        var r = evalAST(node.right, xVal);
+        if (node.op === "+") return l + r;
+        if (node.op === "-") return l - r;
+        if (node.op === "*") return l * r;
+        if (node.op === "/") {
+          if (r === 0) throw new Error("Division by zero occurred for this x value.");
+          return l / r;
+        }
+        if (node.op === "^") return Math.pow(l, r);
+      }
+    }
+    return 0;
+  }
+
+  function formatNum(n) {
+    if (!Number.isFinite(n)) return "undefined";
+    var rounded = Math.round(n * 1e9) / 1e9;
+    if (Object.is(rounded, -0) || rounded === 0) return "0";
+    return rounded < 0 ? MINUS + Math.abs(rounded) : String(rounded);
+  }
+
+  function renderExponent(expHtml, isPlainNumber) {
+    var supMap = {
+      "0": "\u2070", "1": "\u00b9", "2": "\u00b2", "3": "\u00b3", "4": "\u2074",
+      "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079", "-": "\u207b"
+    };
+    if (isPlainNumber && /^-?\d+$/.test(expHtml)) {
+      return expHtml.split("").map(function (c) { return supMap[c] || c; }).join("");
+    }
+    return "<sup>" + expHtml + "</sup>";
+  }
+
+  function renderAST(node, mode, xVal, highlightSet) {
+    if (highlightSet && highlightSet.has(node)) {
+      var val = evalAST(node, xVal);
+      return '<span class="op-highlight">' + formatNum(val) + "</span>";
+    }
+
+    switch (node.type) {
+      case "Num":
+        return formatNum(node.value);
+
+      case "Var": {
+        if (mode === "rule") {
+          return '<span class="var-x">x</span>';
+        }
+        if (mode === "placeholder") {
+          return '<span class="placeholder-box">&nbsp;</span>';
+        }
+        var xFormatted = formatNum(xVal);
+        if (mode === "substituted") {
+          var occClass = "occ-" + (((node.index - 1) % 3) + 1);
+          return '<span class="sub-pill ' + occClass + '" title="x replaced by ' + xFormatted + '">' +
+            '<span class="ghost-x">x' + ARROW + "</span>(" + xFormatted + ")</span>";
+        }
+        return "(" + xFormatted + ")";
+      }
+
+      case "Group":
+        return "(" + renderAST(node.expr, mode, xVal, highlightSet) + ")";
+
+      case "Unary":
+        return MINUS + renderAST(node.arg, mode, xVal, highlightSet);
+
+      case "Binary": {
+        var leftStr = renderAST(node.left, mode, xVal, highlightSet);
+        var rightStr = renderAST(node.right, mode, xVal, highlightSet);
+
+        if (node.op === "^") {
+          var isPlain = node.right.type === "Num" && Number.isInteger(node.right.value);
+          return leftStr + renderExponent(rightStr, isPlain);
+        }
+        if (node.op === "*") {
+          return node.implicit ? (leftStr + rightStr) : (leftStr + " " + TIMES + " " + rightStr);
+        }
+        if (node.op === "/") return leftStr + " " + DIV + " " + rightStr;
+        if (node.op === "+") return leftStr + " + " + rightStr;
+        if (node.op === "-") return leftStr + " " + MINUS + " " + rightStr;
+      }
+    }
+    return "";
+  }
+
+  function collectNodes(node, predicate, acc) {
+    acc = acc || [];
+    if (!node || typeof node !== "object") return acc;
+    if (node.left) collectNodes(node.left, predicate, acc);
+    if (node.right) collectNodes(node.right, predicate, acc);
+    if (node.arg) collectNodes(node.arg, predicate, acc);
+    if (node.expr) collectNodes(node.expr, predicate, acc);
+    if (predicate(node)) acc.push(node);
+    return acc;
+  }
+
+  function flattenAdditiveTerms(node, sign, list) {
+    sign = sign || "+";
+    list = list || [];
+    if (node.type === "Binary" && (node.op === "+" || node.op === "-")) {
+      flattenAdditiveTerms(node.left, sign, list);
+      var nextSign = node.op === "-" ? (sign === "+" ? "-" : "+") : sign;
+      flattenAdditiveTerms(node.right, nextSign, list);
+    } else {
+      list.push({ sign: sign, node: node });
+    }
+    return list;
+  }
+
+  function generateSteps(ast, xVal) {
+    var steps = [];
+    var xStr = formatNum(xVal);
+    var lhsPlain = "f(" + xStr + ")";
+    var lhsSub = 'f(<span class="sub-pill occ-1">' + xStr + "</span>)";
+    var finalVal = evalAST(ast, xVal);
+    var finalStr = formatNum(finalVal);
+
+    steps.push({
+      stepNum: 1,
+      title: "Step 1 \u2014 The Function Rule",
+      html: 'f(<span class="var-x">x</span>) = ' + renderAST(ast, "rule", xVal),
+      why: "Start with the original formula. Every 'x' is an input slot waiting for a number."
+    });
+
+    steps.push({
+      stepNum: 2,
+      title: "Step 2 \u2014 State the Substitution (x = " + xStr + ")",
+      html: 'f(<span class="placeholder-box">&nbsp;</span>) = ' + renderAST(ast, "placeholder", xVal),
+      why: "We want to find f(" + xStr + "). Replace every x with empty parentheses ( ) first so signs and exponents stay safe."
+    });
+
+    var varNodes = collectNodes(ast, function (n) { return n.type === "Var"; });
+    steps.push({
+      stepNum: 3,
+      title: "Step 3 \u2014 Drop In x = " + xStr,
+      html: lhsSub + " = " + renderAST(ast, "substituted", xVal),
+      why: varNodes.length > 0
+        ? "Each x becomes (" + xStr + "). Using parentheses is especially important when x is negative or has an exponent."
+        : "This is a constant function\u2014there are no x's to replace, so the output stays " + finalStr + "."
+    });
+
+    var simplified = new Set();
+    var innerGroups = collectNodes(ast, function (n) {
+      return n.type === "Group" && n.expr.type !== "Var" && n.expr.type !== "Num";
+    });
+    var powerNodes = collectNodes(ast, function (n) {
+      return n.type === "Binary" && n.op === "^";
+    });
+
+    if (powerNodes.length > 0 || innerGroups.length > 0) {
+      var activeNodes = powerNodes.length > 0 ? powerNodes : innerGroups;
+      var notes = activeNodes.map(function (n) {
+        var before = renderAST(n, "plainSub", xVal, simplified);
+        var after = formatNum(evalAST(n, xVal));
+        return before + " " + ARROW + " " + after;
+      });
+
+      activeNodes.forEach(function (n) { simplified.add(n); });
+      powerNodes.forEach(function (p) {
+        if (p.left.type === "Group") simplified.add(p.left);
+      });
+
+      steps.push({
+        stepNum: steps.length + 1,
+        title: powerNodes.length > 0 ? "Step " + (steps.length + 1) + " \u2014 Exponents First" : "Step " + (steps.length + 1) + " \u2014 Parentheses First",
+        html: lhsPlain + " = " + renderAST(ast, "plainSub", xVal, simplified),
+        why: "Order of operations (PEMDAS/BODMAS): evaluate " + notes.join(", ") + " before multiplying or dividing."
+      });
+    }
+
+    var multDivNodes = collectNodes(ast, function (n) {
+      return n.type === "Binary" && (n.op === "*" || n.op === "/") && !simplified.has(n);
+    });
+
+    var topMultDiv = multDivNodes.filter(function (n) {
+      return !multDivNodes.some(function (other) {
+        return other !== n && collectNodes(other, function (c) { return c === n; }).length > 0;
+      });
+    });
+
+    if (topMultDiv.length > 0) {
+      var breakdown = topMultDiv.map(function (n) {
+        var exprText = renderAST(n, "plainSub", xVal, simplified);
+        var valText = formatNum(evalAST(n, xVal));
+        return exprText + " = " + valText;
+      });
+
+      topMultDiv.forEach(function (n) { simplified.add(n); });
+
+      steps.push({
+        stepNum: steps.length + 1,
+        title: "Step " + (steps.length + 1) + " \u2014 Multiplication & Division",
+        html: lhsPlain + " = " + renderAST(ast, "plainSub", xVal, simplified),
+        why: "Compute each product/quotient separately: " + breakdown.join(" and ") + "."
+      });
+    }
+
+    var terms = flattenAdditiveTerms(ast);
+    if (terms.length > 1) {
+      var termStrings = terms.map(function (t, idx) {
+        var val = evalAST(t.node, xVal);
+        if (idx === 0) {
+          return t.sign === "-" ? formatNum(-val) : formatNum(val);
+        }
+        if (val < 0) {
+          return t.sign === "+" ? (MINUS + " " + formatNum(Math.abs(val))) : ("+ " + formatNum(Math.abs(val)));
+        }
+        return (t.sign === "-" ? MINUS : "+") + " " + formatNum(val);
+      });
+
+      var subLines = [termStrings.join(" ")];
+      var running = (terms[0].sign === "-" ? -1 : 1) * evalAST(terms[0].node, xVal);
+
+      for (var k = 1; k < terms.length; k++) {
+        var termVal = (terms[k].sign === "-" ? -1 : 1) * evalAST(terms[k].node, xVal);
+        running += termVal;
+        var rest = termStrings.slice(k + 1).join(" ");
+        var highlightedPart = '<span class="op-highlight">' + formatNum(running) + "</span>";
+        subLines.push(rest ? (highlightedPart + " " + rest) : highlightedPart);
+      }
+
+      var combinedHtml = subLines.map(function (line, i) {
+        return i === 0
+          ? (lhsPlain + " = " + line)
+          : ('<div style="margin-top:0.25rem; padding-left: 1.6em;">= ' + line + "</div>");
+      }).join("");
+
+      steps.push({
+        stepNum: steps.length + 1,
+        title: "Step " + (steps.length + 1) + " \u2014 Combine Left to Right",
+        html: combinedHtml,
+        why: "Add and subtract from left to right until a single number remains."
+      });
+    }
+
+    steps.push({
+      stepNum: steps.length + 1,
+      title: "Step " + (steps.length + 1) + " \u2014 Final Answer",
+      html: lhsPlain + ' = <span class="ans-highlight">' + finalStr + "</span>",
+      why: "When the input is x = " + xStr + ", the function outputs " + finalStr + ".",
+      isFinal: true
+    });
+
+    return { steps: steps, finalVal: finalVal, finalStr: finalStr };
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var state = {
+      exprString: "3x^2 - 2x + 5",
+      xVal: 4,
+      steps: [],
+      finalVal: 45,
+      finalStr: "45",
+      revealedCount: 1,
+      yourTurnMode: false,
+      history: []
+    };
+
+    var presetSelect = document.getElementById("presetSelect");
+    var customRow = document.getElementById("customRow");
+    var customExprInput = document.getElementById("customExprInput");
+    var applyCustomBtn = document.getElementById("applyCustomBtn");
+    var xInput = document.getElementById("xInput");
+    var randomXBtn = document.getElementById("randomXBtn");
+    var errorBanner = document.getElementById("errorBanner");
+
+    var nextStepBtn = document.getElementById("nextStepBtn");
+    var resetBtn = document.getElementById("resetBtn");
+    var showAllBtn = document.getElementById("showAllBtn");
+    var nextExampleBtn = document.getElementById("nextExampleBtn");
+    var yourTurnToggle = document.getElementById("yourTurnToggle");
+
+    var yourTurnBox = document.getElementById("yourTurnBox");
+    var yourTurnPrompt = document.getElementById("yourTurnPrompt");
+    var studentAnswerInput = document.getElementById("studentAnswerInput");
+    var checkAnswerBtn = document.getElementById("checkAnswerBtn");
+    var feedbackMsg = document.getElementById("feedbackMsg");
+
+    var progressLabel = document.getElementById("progressLabel");
+    var progressFill = document.getElementById("progressFill");
+    var targetQueryLabel = document.getElementById("targetQueryLabel");
+    var stepsContainer = document.getElementById("stepsContainer");
+
+    var historyList = document.getElementById("historyList");
+    var emptyHistoryMsg = document.getElementById("emptyHistoryMsg");
+    var clearHistoryBtn = document.getElementById("clearHistoryBtn");
+
+    function showError(msg) {
+      errorBanner.textContent = msg;
+      errorBanner.classList.add("visible");
+    }
+
+    function clearError() {
+      errorBanner.textContent = "";
+      errorBanner.classList.remove("visible");
+    }
+
+    function maxVisibleSteps() {
+      return state.yourTurnMode ? Math.max(1, state.steps.length - 1) : state.steps.length;
+    }
+
+    function addToHistory(expr, xVal, ansStr) {
+      var key = expr + "|" + xVal;
+      if (state.history.some(function (item) { return item.key === key; })) return;
+
+      state.history.unshift({
+        key: key,
+        expr: expr,
+        xVal: xVal,
+        ansStr: ansStr,
+        label: "f(" + formatNum(xVal) + ") = " + ansStr,
+        sub: "f(x) = " + normalizeInput(expr)
+      });
+
+      if (state.history.length > 10) state.history.pop();
+      renderHistory();
+    }
+
+    function renderHistory() {
+      historyList.innerHTML = "";
+      emptyHistoryMsg.style.display = state.history.length === 0 ? "block" : "none";
+
+      state.history.forEach(function (item) {
+        var li = document.createElement("li");
+        li.className = "history-item";
+        li.tabIndex = 0;
+        li.setAttribute("role", "button");
+        li.innerHTML = "<strong>" + item.label + "</strong><small>" + item.sub + "</small>";
+
+        function load() {
+          state.exprString = item.expr;
+          xInput.value = item.xVal;
+          var matchingOption = Array.from(presetSelect.options).find(function (o) { return o.value === item.expr; });
+          if (matchingOption) {
+            presetSelect.value = item.expr;
+            customRow.classList.remove("visible");
+          } else {
+            presetSelect.value = "custom";
+            customExprInput.value = item.expr;
+            customRow.classList.add("visible");
+          }
+          rebuildProblem(true);
+        }
+
+        li.addEventListener("click", load);
+        li.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            load();
+          }
+        });
+        historyList.appendChild(li);
+      });
+    }
+
+    function render() {
+      var total = state.steps.length;
+      var cap = maxVisibleSteps();
+      if (state.revealedCount > cap) state.revealedCount = cap;
+
+      var shown = state.steps.slice(0, state.revealedCount);
+
+      progressLabel.textContent = "Step " + state.revealedCount + " of " + total + (state.yourTurnMode ? " (Answer Hidden)" : "");
+      progressFill.style.width = ((state.revealedCount / total) * 100) + "%";
+      targetQueryLabel.textContent = "Find f(" + formatNum(state.xVal) + ")";
+
+      nextStepBtn.disabled = state.revealedCount >= cap;
+      showAllBtn.disabled = state.revealedCount >= cap;
+
+      stepsContainer.innerHTML = "";
+      shown.forEach(function (step, idx) {
+        var isLatest = idx === shown.length - 1;
+        var card = document.createElement("article");
+        card.className = "step-card" + (isLatest ? " current" : "") + (step.isFinal ? " final-card" : "");
+
+        card.innerHTML =
+          '<div class="step-meta"><span class="step-title">' + step.title + "</span></div>" +
+          '<div class="math-line">' + step.html + "</div>" +
+          (step.why ? '<div class="why-hint"><strong>Why?</strong> ' + step.why + "</div>" : "");
+
+        stepsContainer.appendChild(card);
+      });
+
+      if (!state.yourTurnMode && state.revealedCount === total) {
+        addToHistory(state.exprString, state.xVal, state.finalStr);
+      }
+    }
+
+    function rebuildProblem(resetToFirstStep) {
+      clearError();
+      var rawX = xInput.value.trim();
+      var parsedX = Number(rawX);
+      if (rawX === "" || Number.isNaN(parsedX)) {
+        showError("Please enter a valid number for x.");
+        return;
+      }
+
+      try {
+        var ast = parseExpression(state.exprString);
+        var result = generateSteps(ast, parsedX);
+        state.xVal = parsedX;
+        state.steps = result.steps;
+        state.finalVal = result.finalVal;
+        state.finalStr = result.finalStr;
+        if (resetToFirstStep) {
+          state.revealedCount = 1;
+        }
+
+        studentAnswerInput.value = "";
+        feedbackMsg.textContent = "";
+        feedbackMsg.className = "feedback-msg";
+        yourTurnPrompt.textContent = "Calculate f(" + formatNum(parsedX) + ") for f(x) = " + normalizeInput(state.exprString) + ":";
+
+        render();
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    presetSelect.addEventListener("change", function () {
+      if (presetSelect.value === "custom") {
+        customRow.classList.add("visible");
+        customExprInput.focus();
+      } else {
+        customRow.classList.remove("visible");
+        state.exprString = presetSelect.value;
+        rebuildProblem(true);
+      }
+    });
+
+    applyCustomBtn.addEventListener("click", function () {
+      state.exprString = customExprInput.value;
+      rebuildProblem(true);
+    });
+
+    customExprInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        state.exprString = customExprInput.value;
+        rebuildProblem(true);
+      }
+    });
+
+    xInput.addEventListener("change", function () { rebuildProblem(true); });
+
+    randomXBtn.addEventListener("click", function () {
+      var choices = [-5, -4, -3, -2, -1, 0, 2, 3, 4, 5, 6];
+      var nextX = choices[Math.floor(Math.random() * choices.length)];
+      if (nextX === state.xVal) nextX += 2;
+      xInput.value = nextX;
+      rebuildProblem(true);
+    });
+
+    nextStepBtn.addEventListener("click", function () {
+      if (state.revealedCount < maxVisibleSteps()) {
+        state.revealedCount++;
+        render();
+      }
+    });
+
+    resetBtn.addEventListener("click", function () {
+      state.revealedCount = 1;
+      render();
+    });
+
+    showAllBtn.addEventListener("click", function () {
+      state.revealedCount = maxVisibleSteps();
+      render();
+    });
+
+    nextExampleBtn.addEventListener("click", function () {
+      var presets = Array.from(presetSelect.options).filter(function (o) { return o.value !== "custom"; });
+      var nextIdx = (presetSelect.selectedIndex + 1) % presets.length;
+      presetSelect.selectedIndex = nextIdx;
+      customRow.classList.remove("visible");
+      state.exprString = presets[nextIdx].value;
+      var sampleXs = [4, -3, 3, -2, 5, 2, -1];
+      xInput.value = sampleXs[nextIdx % sampleXs.length];
+      rebuildProblem(true);
+    });
+
+    yourTurnToggle.addEventListener("change", function () {
+      state.yourTurnMode = yourTurnToggle.checked;
+      yourTurnBox.classList.toggle("visible", state.yourTurnMode);
+      render();
+    });
+
+    checkAnswerBtn.addEventListener("click", function () {
+      var raw = normalizeInput(studentAnswerInput.value);
+      var guess = Number(raw);
+      if (raw === "" || Number.isNaN(guess)) {
+        feedbackMsg.textContent = "Type a numeric answer first.";
+        feedbackMsg.className = "feedback-msg err";
+        return;
+      }
+
+      if (Math.abs(guess - state.finalVal) < 1e-6) {
+        feedbackMsg.textContent = "Correct! f(" + formatNum(state.xVal) + ") = " + state.finalStr + ". Revealing full solution...";
+        feedbackMsg.className = "feedback-msg ok";
+        state.yourTurnMode = false;
+        yourTurnToggle.checked = false;
+        state.revealedCount = state.steps.length;
+        render();
+      } else {
+        feedbackMsg.textContent = 'Not quite \u2014 click "Next step" to check your signs, exponents, and multiplication.';
+        feedbackMsg.className = "feedback-msg err";
+      }
+    });
+
+    studentAnswerInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") checkAnswerBtn.click();
+    });
+
+    clearHistoryBtn.addEventListener("click", function () {
+      state.history = [];
+      renderHistory();
+    });
+
+    rebuildProblem(true);
+  });
+})();
+</script>
+</body>
+</html>
